@@ -1,0 +1,27 @@
+---
+title: Internal Packages for Common Data Manipulations
+author: Jon Harmon
+date: '2018-02-19'
+slug: internal-packages-for-common-data-manipulations
+categories: []
+tags:
+  - packages
+  - R
+  - RStudio
+  - munging
+---
+
+```{r setup, include=FALSE}
+library(blogdown)
+```
+
+Last week, I replied to a tweet by [Jesse Maegan](https://twitter.com/kierisi) about what I do day to day as a working data scientist. Her reply set me on the path that (finally) led to this blog.
+
+```{r echo=FALSE}
+shortcode('tweet', '963080270034472962')
+```
+
+Today I'll walk through how and why to build an R package for data analysis. I'll cover some of the best practices my coworkers and I stumbled through when we first started this process.
+
+## Step 1: Read Hadley's Book
+
