@@ -23,5 +23,119 @@ shortcode('tweet', '963080270034472962')
 
 Today I'll walk through how and why to build an R package for data analysis. I'll cover some of the best practices my coworkers and I stumbled through when we first started this process.
 
-## Step 1: Read Hadley's Book
+## When should you write a data manipulation package?
 
+Writing an R package is probably easier than you think, so don't be intimidated! However, there *is* some overhead involved in writing a package, so you want to check a couple things:
+
+### Will the data source be reused?
+
+In the excellent book [R for Data Science](http://r4ds.had.co.nz/) by Garrett Grolemund and Hadley Wickham, they establish a simple [rule for writing a function](http://r4ds.had.co.nz/functions.html#when-should-you-write-a-function): 
+
+> "You should consider writing a function whenever you’ve copied and pasted a block of code more than twice (i.e. you now have three copies of the same code)." 
+
+Let's adapt that to the following: If you're connecting to a data source for a third time, you should consider writing a data manipulation package.
+
+### Do you have to manipulate the incoming data in a consistent way?
+
+When I load data, the first thing I generally do is make sure all of the variables (columns) that I'm going to work with are typed properly. Dates might come in as strings that need to be parsed, or maybe something that obviously should be an integer is treated as a character string. The data might also have an odd way to indicate missing values, so I need to make sure I deal with those. All of these tasks are strong indicators that a data manipulation package could be helpful, ensuring that the data always comes into my analysis the same way.
+
+### Does the data change?
+
+If you're loading the same data repeatedly, and you have to clean it up in a consistent way, you still probably don't need a data manipulation package if the data doesn't change. Instead, simply save the data using `save(object, file = "filename.RData")` or `saveRDS(object, file = "filename.rds")`, and then `load(file = "filename.Rdata")` or `new_var <- readRDS(file = "filename.rds")` in the next analysis.
+
+## How should you write a data manipulation package?
+
+If your data passes those rules, it's time to write a package! Here are some things to do to make sure you'll be successful.
+
+### Step 1: Read the book.
+
+If you've never written an R package (or even if you have), a good first step is to read [*R packages*](http://r-pkgs.had.co.nz/) by Hadley Wickham. It's available for free online, covers all of the basics about how to get started quickly, and only takes an hour or two to read. You don't have to absorb everything the first time through, but it was very helpful to read through it when I first got started with package development to wrap my head around how the process works---and how devtools and RStudio make it super easy to write a package. I'll mention the relevant parts as they come up in the rest of this post, but I recommend digging into the book deeper once you begin building a package.
+
+### Step 2: Rewrite your analysis to use functions.
+
+Before you convert your data manipulation into a package, first open up your previous analysis and rewrite any code that reads your data to use functions. For example, if you have code that looks like this:
+
+```{r original analysis, echo=TRUE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(readr)
+library(stringr)
+year_of_interest <- 1977
+unemployment <- read_tsv(file = 'https://download.bls.gov/pub/time.series/ln/ln.data.1.AllData') %>% 
+  filter(
+    year == year_of_interest
+    , str_detect(period, 'M')
+  ) %>% 
+  mutate(
+    month = as.integer(str_extract(period, '(?<=M)\\d+'))
+    , series_type = str_extract(series_id, '...')
+    , series_id = as.integer(str_extract(series_id, '(?<=...)\\d+'))
+  ) %>% 
+  select(year, month, series_type, series_id, value)
+head(unemployment)
+```
+
+Let's pull that into a function. While we're at it, we'll explicitly declare the packages for everything other than the pipe. This will be useful when we're converting this into a package.
+
+```{r functionized analysis, echo=TRUE, message=FALSE, warning=FALSE}
+get_unemployment <- function(year) {
+  readr::read_tsv(file = 'https://download.bls.gov/pub/time.series/ln/ln.data.1.AllData') %>% 
+  dplyr::filter(
+    year == year_of_interest
+    , stringr::str_detect(period, 'M')
+  ) %>% 
+  dplyr::mutate(
+    month = as.integer(stringr::str_extract(period, '(?<=M)\\d+'))
+    , series_type = stringr::str_extract(series_id, '...')
+    , series_id = as.integer(stringr::str_extract(series_id, '(?<=...)\\d+'))
+  ) %>% 
+  dplyr::select(year, month, series_type, series_id, value)
+}
+
+year_of_interest <- 1977
+unemployment <- get_unemployment(year_of_interest)
+head(unemployment)
+```
+
+Repeat this process anywhere you load data in your family of analyses. Reuse functions when possible, refactoring them to take additional arguments when necessary. During this process, you will likely need to refactor a few times to settle on the set of functions that makes sense for your data, and to settle on a naming convention for your functions.
+
+### Step 3: Create your package.
+
+RStudio makes creating a package relatively painless. If you haven't worked with projects before, this is a great time to start (and then continue, because it keeps things nice and organized). You can create a project under File > New Project. Choose "New Directory", then "R Package". Give your package a name. *R packages* has naming tips, but the most important thing here is to choose something that will clearly tell you what sort of data this package manipulates the next time you need to use the package. For example, if you're creating a package to download and prep the labor statistics from the US Bureau of Labor Statistics, you might call your package "labordata".
+
+Be sure to follow the guidelines in *R packages* for [documenting your package](http://r-pkgs.had.co.nz/man.html). This will save you headaches in a month or a year when you can't remember why you split up the functions in that particular way.
+
+You can likely use the expected data from your existing analyses to create [test cases](http://r-pkgs.had.co.nz/tests.html) for your package. This will be helpful as you adapt the package for future analyses, to ensure that your past work still works.
+
+If you're using the tidyverse, it will be very useful to include the magrittr pipe operator in your package. To do this, create an R file in your package's R directory called "reexort_pipe.R", with a version of this code:
+
+```{r reexport pipe, eval=FALSE}
+#' Pipe data
+#'
+#' Like dplyr, this package allows you to use the pipe function, \code{\%>\%},
+#' to turn function composition into a series of imperative statements.
+#'
+#' @importFrom magrittr %>%
+#' @name %>%
+#' @rdname pipe
+#' @export
+#' @param lhs,rhs A vector of fields or a tibble of fields and values, and a
+#'   function to apply to them
+NULL
+
+```
+
+### Step 4: Update your analysis to use your package.
+
+Switching your analysis from your inline functions to the package should be straightforward. Be sure to do this step! This will allow you to make sure your package does what you expect it to do. You may also find additional tweaks to make to your package.
+
+When I'm doing this, I generally have the package project open in RStudio, but open my analysis file in the same session. As I make changes to the analysis, I can update tests for the package, refactor code, rebuild the package, and make sure that the analysis still produces the expected results.
+
+### Step 5: Continue to update your package.
+
+The first iteration of your package most likely won't catch all of the cases that you need. When you write your first post-package analysis, you will likely find tweaks to make. Switching between projects in RStudio will allow you to quickly update your package as needed. I *highly* recommend implementing version control for your package by this point if you haven't done so already.
+
+## Collaborate.
+
+A data manipulation package can make your analyses more efficient, but this process becomes even more useful if you're working with a team. Each time someone does something with the data source, they can use your package. If you work with a shared version control system (such as github), you can learn to make [pull requests](https://yangsu.github.io/pull-request-tutorial/) to help each other expand the package.
+
+The first time you move your data manipulations into a package, it will likely slow down that particular analysis. However, as you work with the same data more and more, you can cut out one of the more annoying steps of analysis, leaving more time for the fun things.
