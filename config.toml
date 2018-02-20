@@ -1,4 +1,4 @@
-baseurl = "/"
+baseurl = "https://jonthegeek.netlify.com/"
 languageCode = "en-us"
 title = "Jon Harmon's Blog"
 theme = "hugo-lithium-theme"
