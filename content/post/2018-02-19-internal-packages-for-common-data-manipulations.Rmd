@@ -76,11 +76,13 @@ head(unemployment)
 
 Let's pull that into a function. While we're at it, we'll explicitly declare the packages for everything other than the pipe. This will be useful when we're converting this into a package.
 
+*Edit per a [comment](#comment-3770429029) by Mikko Marttila: Before you turn everything into functions, be sure to clear your workspace! You can do this in RStudio with the broom icon on the Environment tab. I didn't when I put this example together, and it led to me writing a function that doesn't actualy work! I've updated the function here. It now uses !! ("bang bang"), which makes it somewhat more confusing. You can get a quick [walkthrough of !!](https://www.youtube.com/watch?v=nERXS3ssntw&feature=youtu.be) from Hadley Wickham on his YouTube channel (highly recommended), but the short version is, in this instance, you need to let dplyr::filter know that the second "year" is the variable that's literally "year," not the column called "year" in the incoming data. You could avoid the !! by changing the name of the variable in the function, but I find it helpful to stick with standard names throughout the package whenever possible.*
+
 ```{r functionized analysis, echo=TRUE, message=FALSE, warning=FALSE}
 get_unemployment <- function(year) {
   readr::read_tsv(file = 'https://download.bls.gov/pub/time.series/ln/ln.data.1.AllData') %>% 
   dplyr::filter(
-    year == year_of_interest
+    year == !!year # Edited per comment by Mikko Marttila
     , stringr::str_detect(period, 'M')
   ) %>% 
   dplyr::mutate(
@@ -123,6 +125,8 @@ If you're using the tidyverse, it will be very useful to include the magrittr pi
 NULL
 
 ```
+
+*Edit per a [comment](#comment-3770545205) by Matthias Gomolka: Also add "magrittr" to the Imports section of your DESCRIPTION file, since the pipe needs to be imported from there before your package can export it.*
 
 ### Step 4: Update your analysis to use your package.
 

@@ -72,10 +72,11 @@ head(unemployment)</code></pre>
 ## 5  1977     5 LNS          10000000 158657
 ## 6  1977     6 LNS          10000000 158928</code></pre>
 <p>Let’s pull that into a function. While we’re at it, we’ll explicitly declare the packages for everything other than the pipe. This will be useful when we’re converting this into a package.</p>
+<p><em>Edit per a <a href="#comment-3770429029">comment</a> by Mikko Marttila: Before you turn everything into functions, be sure to clear your workspace! You can do this in RStudio with the broom icon on the Environment tab. I didn’t when I put this example together, and it led to me writing a function that doesn’t actualy work! I’ve updated the function here. It now uses !! (“bang bang”), which makes it somewhat more confusing. You can get a quick <a href="https://www.youtube.com/watch?v=nERXS3ssntw&amp;feature=youtu.be">walkthrough of !!</a> from Hadley Wickham on his YouTube channel (highly recommended), but the short version is, in this instance, you need to let dplyr::filter know that the second “year” is the variable that’s literally “year,” not the column called “year” in the incoming data. You could avoid the !! by changing the name of the variable in the function, but I find it helpful to stick with standard names throughout the package whenever possible.</em></p>
 <pre class="r"><code>get_unemployment &lt;- function(year) {
   readr::read_tsv(file = &#39;https://download.bls.gov/pub/time.series/ln/ln.data.1.AllData&#39;) %&gt;% 
   dplyr::filter(
-    year == year_of_interest
+    year == !!year # Edited per comment by Mikko Marttila
     , stringr::str_detect(period, &#39;M&#39;)
   ) %&gt;% 
   dplyr::mutate(
@@ -118,6 +119,7 @@ head(unemployment)</code></pre>
 #&#39; @param lhs,rhs A vector of fields or a tibble of fields and values, and a
 #&#39;   function to apply to them
 NULL</code></pre>
+<p><em>Edit per a <a href="#comment-3770545205">comment</a> by Matthias Gomolka: Also add “magrittr” to the Imports section of your DESCRIPTION file, since the pipe needs to be imported from there before your package can export it.</em></p>
 </div>
 <div id="step-4-update-your-analysis-to-use-your-package." class="section level3">
 <h3>Step 4: Update your analysis to use your package.</h3>
