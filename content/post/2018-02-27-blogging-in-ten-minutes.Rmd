@@ -109,7 +109,7 @@ This step... will take more than ten minutes, I assume. If you really want, you 
 
 ## Push All the Things
 
-Go back to your Git tab, commit everything, and push back up to your repo. You should now have a blog!
+Go back to your Git tab, commit everything, and push back up to your repo. You should now have a blog! The sample I made while writing this post is currently up at [jonthegeek-blog-demo.netlify.com](https://jonthegeek-blog-demo.netlify.com/).
 
 ## Clean Up
 
