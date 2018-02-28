@@ -41,7 +41,7 @@ Create a [new repository](https://github.com/new) on Github. You'll use this to 
 
 ## Create an RStudio Project
 
-In RStudio, choose File > New Project. Choose Version Control, then Git, then paste the url of your git repository. Everything else will auto-fill. Make sure it looks right, then click "Create Project."
+In RStudio, choose File > New Project. Choose Version Control, then Git, then paste the url of your git repository. Everything else will auto-fill. Make sure it looks right, then click `Create Project`.
 
 ## Create a New Site with Blogdown
 
@@ -57,7 +57,7 @@ Note: We are simply using the default template. I spent two hours digging throug
 
 ## Update the config File with Minimal Tweaks
 
-You should now have a bunch of files, including one in the root directory of your project called "config.toml". Open that file, and make these tweaks:
+You should now have a bunch of files, including one in the root directory of your project called `config.toml`. Open that file, and make these tweaks:
 
 1. Name your site under `title`. This doesn't have to be fancy. Mine's called "Jon Harmon's Blog."
 2. Either update the part that says `https://github.com/rstudio/blogdown` to your own github url, or remove that section.
@@ -89,21 +89,21 @@ Go to the Git tab in RStudio, check everything, and click Commit. Enter a commit
 1. Go to [Netlify](https://www.netlify.com/), and either create a new account or log into an existing account.
 2. Click `New site from Git`.
 3. Click `GitHub`, and follow the instructions to connect to your repo (likely still in your clipboard, but you can hop over to github and grab it if you need it). I can't remember *exactly* what this looked like the first time, but it was straightforward, and gets even more straightforward if you try to set up a second Netlify site.
-4. Set the `Build command` to "hugo_0.19". You're likely using a newer version of hugo, but, at least at some point in the past, Netlify only supported through 0.19 without some fancy work, and we aren't doing anything fancy here. Later you can read documentation and tweak this if things don't work.
-5. Set the `Publish directory` to "public" (without the quotes). This is the directory that blogdown populates with the actual files for your site.
+4. Set the `Build command` to `hugo_0.19` . You're likely using a newer version of hugo, but, at least at some point in the past, Netlify only supported through 0.19 without some fancy work, and we aren't doing anything fancy here. Later you can read documentation and tweak this if things don't work.
+5. Set the `Publish directory` to `public` . This is the directory that blogdown populates with the actual files for your site.
 6. Click `Deploy site`.
 
 Netlify will assign you a random url. You almost definitely want to change this. Click `Domain Settings`, then the `...` next to your random blog URL. If you choose something vaguely unique (such as your name), chances are it'll be available. This is the step that you might want to pause and think about a little, but remember that it doesn't have to be amazing. Good enough is fine for a blog url.
 
 ## Tweak Your config.toml
 
-You now have a URL! Go back to config.toml in RStudio, and update the `baseurl` to your netlify url (such as "https://jonthegeek-blog-demo.netlify.com/")
+You now have a URL! Go back to `config.toml` in RStudio, and update the `baseurl` to your netlify url (such as "https://jonthegeek-blog-demo.netlify.com/")
 
-Note: Your blog... doesn't work yet. You need a post before blogdown will believe that you actually have a blog, logically enough.
+Note: Your blog should now be up and running! It doesn't have content, but it should work!
 
 ## Create a Post
 
-Go back to `Addins` in RStudio, and choose New Post under Blogdown. Give your post a title, some keywords, your name, etc. Choose .Rmd for the Format (this isn't technically required, but it's my personal preference).
+Go back to `Addins` in RStudio, and choose `New Post` under Blogdown. Give your post a title, some keywords, your name, etc. Choose `.Rmd` for the Format (this isn't technically required, but it's my personal preference).
 
 This step... will take more than ten minutes, I assume. If you really want, you can always put up a "Hello world" post, and later delete it, but probably take some time here and write something real. I am choosing not to include this in the ten minutes because otherwise my title won't be catchy.
 

@@ -43,7 +43,7 @@ tags:
 </div>
 <div id="create-an-rstudio-project" class="section level2">
 <h2>Create an RStudio Project</h2>
-<p>In RStudio, choose File &gt; New Project. Choose Version Control, then Git, then paste the url of your git repository. Everything else will auto-fill. Make sure it looks right, then click “Create Project.”</p>
+<p>In RStudio, choose File &gt; New Project. Choose Version Control, then Git, then paste the url of your git repository. Everything else will auto-fill. Make sure it looks right, then click <code>Create Project</code>.</p>
 </div>
 <div id="create-a-new-site-with-blogdown" class="section level2">
 <h2>Create a New Site with Blogdown</h2>
@@ -55,7 +55,7 @@ new_site()</code></pre>
 </div>
 <div id="update-the-config-file-with-minimal-tweaks" class="section level2">
 <h2>Update the config File with Minimal Tweaks</h2>
-<p>You should now have a bunch of files, including one in the root directory of your project called “config.toml”. Open that file, and make these tweaks:</p>
+<p>You should now have a bunch of files, including one in the root directory of your project called <code>config.toml</code>. Open that file, and make these tweaks:</p>
 <ol style="list-style-type: decimal">
 <li>Name your site under <code>title</code>. This doesn’t have to be fancy. Mine’s called “Jon Harmon’s Blog.”</li>
 <li>Either update the part that says <code>https://github.com/rstudio/blogdown</code> to your own github url, or remove that section.</li>
@@ -87,20 +87,20 @@ new_site()</code></pre>
 <li>Go to <a href="https://www.netlify.com/">Netlify</a>, and either create a new account or log into an existing account.</li>
 <li>Click <code>New site from Git</code>.</li>
 <li>Click <code>GitHub</code>, and follow the instructions to connect to your repo (likely still in your clipboard, but you can hop over to github and grab it if you need it). I can’t remember <em>exactly</em> what this looked like the first time, but it was straightforward, and gets even more straightforward if you try to set up a second Netlify site.</li>
-<li>Set the <code>Build command</code> to “hugo_0.19”. You’re likely using a newer version of hugo, but, at least at some point in the past, Netlify only supported through 0.19 without some fancy work, and we aren’t doing anything fancy here. Later you can read documentation and tweak this if things don’t work.</li>
-<li>Set the <code>Publish directory</code> to “public” (without the quotes). This is the directory that blogdown populates with the actual files for your site.</li>
+<li>Set the <code>Build command</code> to <code>hugo_0.19</code> . You’re likely using a newer version of hugo, but, at least at some point in the past, Netlify only supported through 0.19 without some fancy work, and we aren’t doing anything fancy here. Later you can read documentation and tweak this if things don’t work.</li>
+<li>Set the <code>Publish directory</code> to <code>public</code> . This is the directory that blogdown populates with the actual files for your site.</li>
 <li>Click <code>Deploy site</code>.</li>
 </ol>
 <p>Netlify will assign you a random url. You almost definitely want to change this. Click <code>Domain Settings</code>, then the <code>...</code> next to your random blog URL. If you choose something vaguely unique (such as your name), chances are it’ll be available. This is the step that you might want to pause and think about a little, but remember that it doesn’t have to be amazing. Good enough is fine for a blog url.</p>
 </div>
 <div id="tweak-your-config.toml" class="section level2">
 <h2>Tweak Your config.toml</h2>
-<p>You now have a URL! Go back to config.toml in RStudio, and update the <code>baseurl</code> to your netlify url (such as “<a href="https://jonthegeek-blog-demo.netlify.com/" class="uri">https://jonthegeek-blog-demo.netlify.com/</a>”)</p>
-<p>Note: Your blog… doesn’t work yet. You need a post before blogdown will believe that you actually have a blog, logically enough.</p>
+<p>You now have a URL! Go back to <code>config.toml</code> in RStudio, and update the <code>baseurl</code> to your netlify url (such as “<a href="https://jonthegeek-blog-demo.netlify.com/" class="uri">https://jonthegeek-blog-demo.netlify.com/</a>”)</p>
+<p>Note: Your blog should now be up and running! It doesn’t have content, but it should work!</p>
 </div>
 <div id="create-a-post" class="section level2">
 <h2>Create a Post</h2>
-<p>Go back to <code>Addins</code> in RStudio, and choose New Post under Blogdown. Give your post a title, some keywords, your name, etc. Choose .Rmd for the Format (this isn’t technically required, but it’s my personal preference).</p>
+<p>Go back to <code>Addins</code> in RStudio, and choose <code>New Post</code> under Blogdown. Give your post a title, some keywords, your name, etc. Choose <code>.Rmd</code> for the Format (this isn’t technically required, but it’s my personal preference).</p>
 <p>This step… will take more than ten minutes, I assume. If you really want, you can always put up a “Hello world” post, and later delete it, but probably take some time here and write something real. I am choosing not to include this in the ten minutes because otherwise my title won’t be catchy.</p>
 </div>
 <div id="push-all-the-things" class="section level2">
