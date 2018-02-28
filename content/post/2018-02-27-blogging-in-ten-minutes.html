@@ -1,0 +1,122 @@
+---
+title: Blogging in About Ten Minutes
+author: Jon Harmon
+date: '2018-02-27'
+slug: blogging-in-ten-minutes
+categories: []
+tags:
+  - blogdown
+  - netlify
+  - tutorial
+  - R
+  - RStudio
+---
+
+
+
+<p>Last week, I set up my blog. There were a number of excellent <a href="https://alison.rbind.io/post/up-and-running-with-blogdown/">how-tos</a> out there, but I still managed to take several hours to get it up and running. With this guide, you should have a blog posted in (about) five minutes.</p>
+<div id="assumptions" class="section level2">
+<h2>Assumptions</h2>
+<ol style="list-style-type: decimal">
+<li>You have <a href="https://www.rstudio.com/products/rstudio/download/">RStudio</a> installed and are at least vaguely familiar with how to use it.</li>
+<li>You’re at least a little familar with R Markdown (or can read a <a href="https://www.rstudio.com/wp-content/uploads/2015/02/rmarkdown-cheatsheet.pdf">cheat sheet</a>)</li>
+<li>You have admin access to the machine you want to use to blog (or can get someone to work with you to knock these steps out).</li>
+<li>You’re over 13 and can otherwise legally sign up for a <a href="https://www.netlify.com/">Netlify</a> account (you don’t have to do that yet, though; we’ll get there shortly).</li>
+</ol>
+</div>
+<div id="enable-github-in-rstudio" class="section level2">
+<h2>Enable Github in Rstudio</h2>
+<ol style="list-style-type: decimal">
+<li>Create a <a href="https://github.com/">Github</a> account.</li>
+<li>Install git on whatever machine you plan to use.</li>
+<li>Enable git in RStudio (Tools &gt; Global Options &gt; Git/SVN: Make sure your executable is configured).</li>
+</ol>
+</div>
+<div id="install-blogdown" class="section level2">
+<h2>Install Blogdown</h2>
+<p>Blogdown is a fantastic package designed to make it easy to publish an R blog. There is an entire <a href="https://bookdown.org/yihui/blogdown/">book</a>, but you shouldn’t get sidetracked reading it and then spending an hour thinking about some side project like I did. Come back to the book after you’re up and running.</p>
+<pre class="r"><code>install.packages(&quot;blogdown&quot;)</code></pre>
+</div>
+<div id="create-a-github-repository" class="section level2">
+<h2>Create a Github Repository</h2>
+<p>Create a <a href="https://github.com/new">new repository</a> on Github. You’ll use this to keep track of changes to your blog, and so Netlify can see when you have something new. The name of this repo doesn’t matter, but “blog” is likely fine (unless you have multiple blogs). Make it public, and initialize it with a README. Once it’s created, copy the url from “Clone or download.”</p>
+</div>
+<div id="create-an-rstudio-project" class="section level2">
+<h2>Create an RStudio Project</h2>
+<p>In RStudio, choose File &gt; New Project. Choose Version Control, then Git, then paste the url of your git repository. Everything else will auto-fill. Make sure it looks right, then click “Create Project.”</p>
+</div>
+<div id="create-a-new-site-with-blogdown" class="section level2">
+<h2>Create a New Site with Blogdown</h2>
+<p>We’re going to use the blogdown package a bit now, so we’ll library that, and use it to create a new site. We’ll also need to install hugo (the thing that stitches your files together into HTML, CSS, etc), but blogdown also makes that step easy. You’ll need admin access here.</p>
+<pre class="r"><code>library(blogdown)
+install_hugo()
+new_site()</code></pre>
+<p>Note: We are simply using the default template. I spent two hours digging through templates before deciding the default was at least good enough, and better than a lot of the ones I considered. If you must, you can take a side trek here to dig into templates, but from here on out I assume you chose the default.</p>
+</div>
+<div id="update-the-config-file-with-minimal-tweaks" class="section level2">
+<h2>Update the config File with Minimal Tweaks</h2>
+<p>You should now have a bunch of files, including one in the root directory of your project called “config.toml”. Open that file, and make these tweaks:</p>
+<ol style="list-style-type: decimal">
+<li>Name your site under <code>title</code>. This doesn’t have to be fancy. Mine’s called “Jon Harmon’s Blog.”</li>
+<li>Either update the part that says <code>https://github.com/rstudio/blogdown</code> to your own github url, or remove that section.</li>
+<li>Ditto for the <code>https://twitter.com/rstudio</code> section.</li>
+<li>Update the <code>description = &quot;A website built through Hugo and blogdown.&quot;</code> section (although I haven’t actually noticed this impacting anything yet, so maybe come back for this later).</li>
+</ol>
+<p>Save that file. Keep it open, though; we’re going to fix the <code>baseurl</code> as soon as you have one.</p>
+</div>
+<div id="update-about.md" class="section level2">
+<h2>Update about.md</h2>
+<p>Navigate to the <code>content</code> folder, then open about.md. Update the date to make it less of a lie (although that date doesn’t <em>really</em> impact anything), and slap something in there about yourself. You can come back to this later, so don’t stress if it isn’t perfect.</p>
+</div>
+<div id="clean-out-the-post-folder" class="section level2">
+<h2>Clean Out the Post Folder</h2>
+<p>Navigate to the <code>post</code> folder inside <code>content</code>. Delete everything.</p>
+</div>
+<div id="make-sure-your-site-is-built" class="section level2">
+<h2>Make Sure Your Site is Built</h2>
+<p>In RStudio, click Addins (directly above your editor), then Serve Site. That’ll make sure everything you’ve done is updated in the HTML version of your site.</p>
+</div>
+<div id="commit-and-push-everything" class="section level2">
+<h2>Commit and Push Everything</h2>
+<p><em>Note: You might need to set up your git info at this point to stop RStudio from bugging you about things. Fortunately, RStudio will tell you what you need to do if you try to commit and it doesn’t work, so just pay attention to the message.</em></p>
+<p>Go to the Git tab in RStudio, check everything, and click Commit. Enter a commit message, along the lines of “Set up all of the basics of my blog!” Click Commit, and read what it says; it might tell you something to configure. Once that’s working properly, click “Push.”</p>
+</div>
+<div id="set-up-on-netlify" class="section level2">
+<h2>Set Up on Netlify</h2>
+<ol style="list-style-type: decimal">
+<li>Go to <a href="https://www.netlify.com/">Netlify</a>, and either create a new account or log into an existing account.</li>
+<li>Click <code>New site from Git</code>.</li>
+<li>Click <code>GitHub</code>, and follow the instructions to connect to your repo (likely still in your clipboard, but you can hop over to github and grab it if you need it). I can’t remember <em>exactly</em> what this looked like the first time, but it was straightforward, and gets even more straightforward if you try to set up a second Netlify site.</li>
+<li>Set the <code>Build command</code> to “hugo_0.19”. You’re likely using a newer version of hugo, but, at least at some point in the past, Netlify only supported through 0.19 without some fancy work, and we aren’t doing anything fancy here. Later you can read documentation and tweak this if things don’t work.</li>
+<li>Set the <code>Publish directory</code> to “public” (without the quotes). This is the directory that blogdown populates with the actual files for your site.</li>
+<li>Click <code>Deploy site</code>.</li>
+</ol>
+<p>Netlify will assign you a random url. You almost definitely want to change this. Click <code>Domain Settings</code>, then the <code>...</code> next to your random blog URL. If you choose something vaguely unique (such as your name), chances are it’ll be available. This is the step that you might want to pause and think about a little, but remember that it doesn’t have to be amazing. Good enough is fine for a blog url.</p>
+</div>
+<div id="tweak-your-config.toml" class="section level2">
+<h2>Tweak Your config.toml</h2>
+<p>You now have a URL! Go back to config.toml in RStudio, and update the <code>baseurl</code> to your netlify url (such as “<a href="https://jonthegeek-blog-demo.netlify.com/" class="uri">https://jonthegeek-blog-demo.netlify.com/</a>”)</p>
+<p>Note: Your blog… doesn’t work yet. You need a post before blogdown will believe that you actually have a blog, logically enough.</p>
+</div>
+<div id="create-a-post" class="section level2">
+<h2>Create a Post</h2>
+<p>Go back to <code>Addins</code> in RStudio, and choose New Post under Blogdown. Give your post a title, some keywords, your name, etc. Choose .Rmd for the Format (this isn’t technically required, but it’s my personal preference).</p>
+<p>This step… will take more than ten minutes, I assume. If you really want, you can always put up a “Hello world” post, and later delete it, but probably take some time here and write something real. I am choosing not to include this in the ten minutes because otherwise my title won’t be catchy.</p>
+</div>
+<div id="push-all-the-things" class="section level2">
+<h2>Push All the Things</h2>
+<p>Go back to your Git tab, commit everything, and push back up to your repo. You should now have a blog!</p>
+</div>
+<div id="clean-up" class="section level2">
+<h2>Clean Up</h2>
+<p>After you get that satisfying first blog actually posted, there are some things you have left to clean up.</p>
+<ol style="list-style-type: decimal">
+<li>Create a logo! There’s a file in <code>/themes/hugo-lithium-theme/static/images</code> called <code>logo.png</code>. Right now it’s a circle that says “Li” (for lithium, the name of the theme). You should probably replace that with something more unique. I used an old photo of me. Whatever you choose, make it 50 pixels by 50 pixels (or tweak those settings in config.toml), overwrite this file, rebuild your site, and push everything up to github.</li>
+<li>The quick-creation of the new site left some garbage behind. Get rid of <code>/static/post/2015-07-23-r-markdown_files</code>. Theoretically that <em>should</em> nuke its corresponding folder in <code>/public</code> once the site rebuilds, but it isn’t doing so for me, so I also killed it in <code>/public/post/</code>. There’s also some other noise in the <code>/public</code> folder. You can nuke the <code>2015</code> and <code>2016</code> folders. There’s also some noise in <code>/public/tags/</code> that you can get rid of (anything that isn’t a tag on your post), as well as <code>/public/categories/r</code>. If you <em>use</em> those keywords or categories, I suspect hugo would see these and clean them up, but I’ve found no harm in cleaning them out manually. Again, you don’t <em>have</em> to do this, but I felt the need to clean out noise once I got through the sprint.</li>
+</ol>
+<p>Be sure to push all the things again when you’re done cleaning. Netlify will see the changes, and automatically republish your site.</p>
+</div>
+<div id="let-everyone-know" class="section level2">
+<h2>Let Everyone Know!</h2>
+<p>Tweet about your new blog! Post in the comments here about your new blog! Tell your friends about your new blog! If it’s an R blog, let me know here or on <a href="https://twitter.com/jonthegeek">twitter</a>, and I’ll take a look and let people know you’re up and running. The R community is super friendly, so you’ll likely have some eyes—and comments—in no time!</p>
+</div>
