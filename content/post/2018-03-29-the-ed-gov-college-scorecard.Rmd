@@ -1,0 +1,153 @@
+---
+title: The Ed.gov College Scorecard
+author: Jon Harmon
+date: '2018-03-29'
+slug: the-ed-gov-college-scorecard
+categories: []
+tags:
+  - R
+  - munging
+  - tutorial
+  - eda
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(DT.options = list(scrollX = TRUE))
+```
+
+Today I'm exploring a dataset and trying to get it into a more usable format. This post is a prequel to a talk I'll be posting Saturday for the [R4Ds Online Learning Community](https://www.jessemaegan.com/post/r4ds-the-next-iteration/), in which I turn the data I explore in this post into a simple data package (and explain why and how to do that). I'll be available on the R4DS Community Slack to answer questions (or to learn new tips on how to do some of this stuff easier) on March 31 at noon Eastern Daylight Time.
+
+## Packages
+
+<img src="/img/tidyverse.png" style="float:right;padding:5px;"> Whenever I use a function from a package in this post, I call out the package explicitly with package::function syntax. Still, it's friendly to let you know what you should install to play along. We'll mostly use dplyr, but there are a couple calls to map functions from purrr, and we'll use tidyr::fill to make some things easier to use. We'll use readr and readxl to get the data into our session, and we'll use stringr once or twice to clean up some text. We'll use DT::datatable to make the tables a bit more browsable. We'll also use rlang for some tidy evaluation (specifically !! and :=). If you aren't familiar with tidy evaluation, [this video by Hadley Wickham](https://www.youtube.com/watch?v=nERXS3ssntw) is an excellent introduction.
+
+```{r packages, message=FALSE, warning=FALSE}
+library(dplyr)
+library(DT)
+library(purrr)
+library(readr)
+library(readxl)
+library(rlang)
+library(stringr)
+library(tidyr)
+```
+
+## The Data
+
+<img src="/img/datagov.png" style="float:right;padding:5px;"> The College Scorecard is freely available from the [US government](https://catalog.data.gov/dataset/college-scorecard) (licensed under [Creative Commons CCZero](http://opendefinition.org/licenses/cc-zero/), meaning it is fully public domain). I've downloaded the [full raw data](https://catalog.data.gov/dataset/college-scorecard/resource/2a7f670e-0799-436a-9394-df0a9b3ba7c5) locally and unzipped it. We're going to focus our exploration on the most recent data (2015-2016). 
+
+```{r import scorecards, message=FALSE, warning=FALSE}
+college_scorecard_2015_2016 <- readr::read_csv(
+  "CollegeScorecard_Raw_Data/MERGED2015_16_PP.csv",
+  na = c("", "NA", "NULL")
+)
+```
+
+The data includes `r ncol(college_scorecard_2015_2016)` observations (aka columns or features) about colleges and universities in the United States (`r nrow(college_scorecard_2015_2016)` institutions as of 2015-2016). However, the column names can be fairly opaque (for example, "HCM2" means "under_investigation" or "heightened cash monitoring 2", where "The Department places institutions on a Heightened Cash Monitoring (HCM) payment method to provide additional oversight of cash management. HCM2 is the type of HCM that indicates more serious financial or federal compliance issues. These data are maintained by FSA.")
+
+To make the data more useful, let's rename the columns, make sure they're typed as expected, and translate encoded values into more meaningful values. To help us out, we'll use the [data dictionary](https://collegescorecard.ed.gov/assets/CollegeScorecardDataDictionary.xlsx). I've downloaded it locally so we don't have to deal with parsing data from the web for this project.
+
+## The Data Dictionary
+
+The provided data dictionary is a pretty good guide to making the data more useful.
+
+```{r data dictionary}
+data_dictionary <- readxl::read_xlsx(
+  "CollegeScorecardDataDictionary.xlsx", 
+  sheet = "data_dictionary"
+)
+DT::datatable(head(data_dictionary), options = list(pageLength = 3))
+```
+
+<img src="/college_scorecard/empty_columns.png" style="float:right;"> From a quick glance through the dictionary, we can see that two columns are mostly empty: VALUE and LABEL. These columns describe sub-dictionaries for certain columns, where a given value in that column has an expanded meaning. We'll come back to those in a bit, and use them to build a couple more tibbles of data.
+
+The columns that are most immediately useful to us, though, are "developer-friendly name", "API data type", and "VARIABLE NAME". Let's use those to clean up the data.
+
+```{r dictionary for cleaning}
+column_definitions <- data_dictionary %>% 
+  dplyr::select(
+    ugly_column_name = `VARIABLE NAME`, 
+    better_column_name = `developer-friendly name`, 
+    data_type = `API data type`
+  ) %>% 
+  dplyr::filter(ugly_column_name != "")
+DT::datatable(head(column_definitions))
+```
+
+## Applying the Dictionary
+
+Right away, we can see that the "data_type" column is going to need some translation (what is an "autocomplete" data type?), but it should get us closer. We'll use this information to walk through the given data, fixing the columns. Note that the dictionary has 4 "VARIABLE NAMEs" that have lowercase characters, but the column names are all uppercase. There are also 9 columns that aren't defined in this part of the data dictionary, so we'll ignore those columns for now; I'll be happy to have the other 1796 columns cleaned. While we're at it, we'll remove any columns that don't vary; there are historical columns sticking around in the dataset that do not currently have any information, so let's get rid of those.
+
+```{r cleaning the columns}
+column_definitions <- column_definitions %>%
+  dplyr::mutate(ugly_column_name = stringr::str_to_upper(ugly_column_name)) %>% 
+  dplyr::filter(ugly_column_name %in% colnames(college_scorecard_2015_2016)) %>% 
+  dplyr::mutate(data_type = dplyr::recode(
+    data_type, 
+    integer = "integer",
+    autocomplete = "character", 
+    string = "character", 
+    float = "double"
+  ))
+defined_columns <- dplyr::intersect(
+  colnames(college_scorecard_2015_2016), 
+  column_definitions$ugly_column_name
+)
+
+latest_college_scorecard <- purrr::map_dfc(defined_columns, function(this_column) {
+  this_column_contents <- college_scorecard_2015_2016[[this_column]]
+  # If this column has no variability, let's get rid of it.
+  this_column_variability <- unique(this_column_contents)
+  if(length(this_column_variability) == 1) {
+    NULL
+  } else {
+    definition <- column_definitions %>% 
+      dplyr::filter(ugly_column_name == this_column)
+    data_type <- definition$data_type[[1]]
+    suppressWarnings(class(this_column_contents) <- data_type)
+    better_name <- definition$better_column_name[[1]]
+    dplyr::tibble(
+      !! better_name := this_column_contents
+    )
+  }
+})
+DT::datatable(head(latest_college_scorecard, 3))
+```
+
+That's already much better. We now have `r ncol(latest_college_scorecard)` columns with mostly meaningful names and proper types. 
+
+## Factor Columns
+
+Now let's look into those "VALUE" and "LABEL" columns from the data dictionary. Everything in the VALUE column is an integer, which means they're pretty close to an index of a factor. Interesting. Watch how it lets us clean up the "degrees_awarded.predominant" column (which just contains seemingly random integers above), for example.
+
+```{r factors, message=FALSE, warning=FALSE}
+sub_dictionaries <- data_dictionary %>% 
+  dplyr::filter(!is.na(VALUE)) %>% 
+  dplyr::select(better_column_name = `developer-friendly name`, current_value = VALUE, target_value = LABEL) %>% 
+  tidyr::fill(better_column_name, .direction = "down")
+
+factor_columns <- unique(sub_dictionaries$better_column_name)
+latest_college_scorecard_factored <- purrr::map_dfc(colnames(latest_college_scorecard), function(this_column) {
+  if(this_column %in% factor_columns) {
+    # Translate this to a factor.
+    this_dictionary <- sub_dictionaries %>%
+      dplyr::filter(better_column_name == this_column) %>%
+      dplyr::rename(!! this_column := current_value) %>% 
+      dplyr::select(-better_column_name)
+    new_column <- latest_college_scorecard[this_column] %>%
+      dplyr::left_join(this_dictionary) %>%
+      dplyr::select(target_value) %>% 
+      dplyr::mutate(target_value = as.factor(target_value))
+    names(new_column) <- this_column
+    new_column
+  } else {
+    latest_college_scorecard[this_column]
+  }
+})
+DT::datatable(head(latest_college_scorecard_factored, 50))
+```
+
+And with that, I think we have a much more usable set of data!
+
+On Saturday (March 31), I'll pull this into a simple data package and add some additional documentation, to make sure [future me](http://r-pkgs.had.co.nz/man.html) remembers what the columns mean. I may also show how to quickly update the data; moments before I published this post, I got a notification that the Department of Education had made some small tweaks to the data. Stay tuned!
