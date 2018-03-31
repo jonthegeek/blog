@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 options(DT.options = list(scrollX = TRUE))
 ```
 
-Today I'm exploring a dataset and trying to get it into a more usable format. This post is a prequel to a talk I'll be posting Saturday for the [R4Ds Online Learning Community](https://www.jessemaegan.com/post/r4ds-the-next-iteration/), in which I turn the data I explore in this post into a simple data package (and explain why and how to do that). I'll be available on the R4DS Community Slack to answer questions (or to learn new tips on how to do some of this stuff easier) on March 31 at noon Eastern Daylight Time.
+Today I'm exploring a dataset and trying to get it into a more usable format. This post is a prequel to a [video/talk](https://youtu.be/9GZZ69ywmQs) for the [R4Ds Online Learning Community](https://www.jessemaegan.com/post/r4ds-the-next-iteration/), in which I turn the data I explore in this post into a simple data package (and explain why and how to do that).
 
 ## Packages
 
@@ -150,4 +150,4 @@ DT::datatable(head(latest_college_scorecard_factored, 50))
 
 And with that, I think we have a much more usable set of data!
 
-On Saturday (March 31), I'll pull this into a simple data package and add some additional documentation, to make sure [future me](http://r-pkgs.had.co.nz/man.html) remembers what the columns mean. I may also show how to quickly update the data; moments before I published this post, I got a notification that the Department of Education had made some small tweaks to the data. Stay tuned!
+In [this video](https://youtu.be/9GZZ69ywmQs), I pull this into a simple data package and add some additional documentation, to make sure [future me](http://r-pkgs.had.co.nz/man.html) remembers what the columns mean.
