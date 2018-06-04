@@ -1,0 +1,226 @@
+---
+title: Writing Custom Tidyverse Functions
+author: Jon Harmon
+date: '2018-06-04'
+slug: writing-custom-tidyverse-functions
+categories: []
+tags:
+  - R
+  - tutorial
+---
+
+<script src="/rmarkdown-libs/htmlwidgets/htmlwidgets.js"></script>
+<script src="/rmarkdown-libs/jquery/jquery.min.js"></script>
+<link href="/rmarkdown-libs/datatables-css/datatables-crosstalk.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/datatables-binding/datatables.js"></script>
+<link href="/rmarkdown-libs/dt-core/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="/rmarkdown-libs/dt-core/css/jquery.dataTables.extra.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/dt-core/js/jquery.dataTables.min.js"></script>
+<link href="/rmarkdown-libs/crosstalk/css/crosstalk.css" rel="stylesheet" />
+<script src="/rmarkdown-libs/crosstalk/js/crosstalk.min.js"></script>
+
+
+<p><code>dplyr</code> and the other members of the <code>tidyverse</code> are fantastic for making exploratory data analysis quick and easy. However, that ease-of-use comes with a price: programming with the <code>tidyverse</code> has a steep learning curve. Let’s see if we can climb that hill together.</p>
+<div id="packages-used" class="section level2">
+<h2>Packages used</h2>
+<p>We’ll need three packages for this tutorial: <code>dplyr</code>, <code>rlang</code>, and <code>purrr</code>. We’ll be making custom versions of a couple functions in <code>dplyr</code>, and we’ll use <code>rlang</code> (the package behind “tidy evaluation,” the way the <code>tidyverse</code> “thinks”) to make those changes. We’ll also use <code>purrr::map</code> toward the end. I’ll explicitly call out most function calls with <code>dplyr::</code> or <code>rlang::</code> to make it clear where each function comes from. There are four notable exceptions. The first is the pipe, <code>%&gt;%</code>, which I assume you’ve seen before if you’re reading this post (if not, check out the vignette in the <code>magrittr</code> package). I’ll explain the other three when I get to them.</p>
+<pre class="r"><code>library(dplyr) # v0.7.5
+library(rlang) # v0.2.1
+library(purrr) # v0.2.5</code></pre>
+</div>
+<div id="fake-student-data" class="section level2">
+<h2>Fake student data</h2>
+<p>I’m going to work with some fake student data, logging how students interacted with 10 questions on one of four assignments, in which the students can keep making attempts on each question until they’re scored as correct, request the solution, or move on to another question. In addition to a <code>student_id</code>, <code>assignment_id</code>, and <code>question_number</code>, each row specifies whether or not the student eventually reached the <code>correct</code> answer, whether they viewed a hint (<code>viewed_hint</code>), whether they gave up and requested the solution (<code>requested_solution</code>), and how many <code>attempts</code> they made on the question. If you’d like to generate the same data to play along, <a href="#generating">see the code at the end of this post</a>.</p>
+<div id="htmlwidget-1" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-1">{"x":{"filter":"none","data":[[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,8,8,8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9,9,9,10,10,10,10,10,10,10,10,10,10],[2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10],[1,1,1,0,0,1,1,0,0,1,0,1,1,0,0,0,1,1,1,0,1,1,1,0,1,0,1,0,0,0,1,1,1,0,0,0,0,1,1,1,0,1,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,1,1,0,0,1,0,1,1,1,0,1,0,0,1,1,1,1,0,1,0,0,0,0,1,1,0,1,0,0,1,0,0,1,0,0,0,0,1,0],[1,1,1,0,1,1,1,1,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,1,1,1,1,1,1,0,1,0,0,0,1,0,1,1,1,0,1,1,0,0,1,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,1,0,1,1,0,0,0,0,1,0,1,0,0,0,1,1,1,0,1,0,1,0,0,0,1,1,0,0,0,1,0,1,0,0,1,1,1,0],[0,0,1,1,0,1,1,1,0,1,0,1,0,1,0,1,0,0,0,0,0,1,1,0,1,1,0,0,0,1,1,1,0,1,0,1,0,0,1,1,0,0,0,0,1,1,1,0,1,1,1,0,0,1,1,1,1,0,1,0,0,0,0,0,0,0,1,0,1,0,0,1,1,1,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0],[2,1,3,2,2,2,2,3,10,4,2,2,2,2,8,2,2,1,2,2,1,2,1,3,3,1,1,2,1,6,2,1,1,2,2,2,2,1,1,3,2,2,2,2,3,2,3,3,2,2,1,2,2,2,4,1,8,6,2,2,1,4,3,10,3,2,1,2,2,1,2,2,3,2,2,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,1,5,10,3,1,2,8,2,4,3]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>student_id<\/th>\n      <th>assignment_id<\/th>\n      <th>question_number<\/th>\n      <th>correct<\/th>\n      <th>viewed_hint<\/th>\n      <th>requested_solution<\/th>\n      <th>attempts<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3,4,5,6]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="what-well-do" class="section level2">
+<h2>What we’ll do</h2>
+<ul>
+<li>We’ll start off with a <a href="#not_fancy">simple function</a> that doesn’t require any tidy evaluation, to make it clear that you don’t <em>always</em> need to know anything special to program with tidyverse functions.</li>
+<li>We’ll then learn how we can pass a “bare” column name into a function and get dplyr’s verbs to <a href="#ensym">use it how we expect it to be used</a>.</li>
+<li>We’ll extend that to send in <a href="#ensyms"><em>multiple</em> column names</a>.</li>
+<li>We’ll see how we can pass around <a href="#enquo"><em>functions</em> of column names</a>.</li>
+<li>We’ll see how we can get dplyr to <a href="#quo_name">treat column names as strings</a> when we want them.</li>
+<li>We’ll learn about the <a href="#digest_assign">new assignment operator</a> <code>:=</code>, and when we need it.</li>
+</ul>
+</div>
+<div id="not_fancy" class="section level2">
+<h2>Nothing fancy: add_cfa_col</h2>
+<p>The simplest thing I want to do is to add a column indicating whether the student got the correct answer on their first attempt (“cfa”). Note: This isn’t the <em>first</em> thing I’d normally do, but it’s by far the simplest, so we’ll get it out of the way. I use this value a lot in my investigations, so it’ll be nice to be able to add that column quickly and easily. This isn’t <em>that</em> hard to do with a simple dplyr::mutate:</p>
+<pre class="r"><code>student_assignment_data %&gt;% 
+  dplyr::mutate(cfa = correct == 1L &amp; attempts == 1L)</code></pre>
+<div id="htmlwidget-2" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-2">{"x":{"filter":"none","data":[[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,8,8,8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9,9,9,10,10,10,10,10,10,10,10,10,10],[2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10],[1,1,1,0,0,1,1,0,0,1,0,1,1,0,0,0,1,1,1,0,1,1,1,0,1,0,1,0,0,0,1,1,1,0,0,0,0,1,1,1,0,1,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,1,1,0,0,1,0,1,1,1,0,1,0,0,1,1,1,1,0,1,0,0,0,0,1,1,0,1,0,0,1,0,0,1,0,0,0,0,1,0],[1,1,1,0,1,1,1,1,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,1,1,1,1,1,1,0,1,0,0,0,1,0,1,1,1,0,1,1,0,0,1,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,1,0,1,1,0,0,0,0,1,0,1,0,0,0,1,1,1,0,1,0,1,0,0,0,1,1,0,0,0,1,0,1,0,0,1,1,1,0],[0,0,1,1,0,1,1,1,0,1,0,1,0,1,0,1,0,0,0,0,0,1,1,0,1,1,0,0,0,1,1,1,0,1,0,1,0,0,1,1,0,0,0,0,1,1,1,0,1,1,1,0,0,1,1,1,1,0,1,0,0,0,0,0,0,0,1,0,1,0,0,1,1,1,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0],[2,1,3,2,2,2,2,3,10,4,2,2,2,2,8,2,2,1,2,2,1,2,1,3,3,1,1,2,1,6,2,1,1,2,2,2,2,1,1,3,2,2,2,2,3,2,3,3,2,2,1,2,2,2,4,1,8,6,2,2,1,4,3,10,3,2,1,2,2,1,2,2,3,2,2,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,1,5,10,3,1,2,8,2,4,3],[false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,true,false,true,false,false,false,true,false,false,false,false,true,true,false,false,false,false,true,true,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>student_id<\/th>\n      <th>assignment_id<\/th>\n      <th>question_number<\/th>\n      <th>correct<\/th>\n      <th>viewed_hint<\/th>\n      <th>requested_solution<\/th>\n      <th>attempts<\/th>\n      <th>cfa<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3,4,5,6]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<p>However, I do this <em>all the time.</em> I’d like to be able to add it by calling a custom function. Let’s call that function <code>add_cfa_col</code>. If we assume my column names are always the same (or I can get them there before calling the function), this can be a simple function that doesn’t rely on any tidy evaluation magic from <code>rlang</code>. I wanted to include this example to show you that it isn’t <em>always</em> hard to program with the <code>tidyverse</code>.</p>
+<pre class="r"><code>add_cfa_col &lt;- function(.data) {
+  dplyr::mutate(.data, cfa = correct == 1L &amp; attempts == 1L)
+}
+
+student_assignment_data %&gt;% 
+  add_cfa_col()</code></pre>
+<div id="htmlwidget-3" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-3">{"x":{"filter":"none","data":[[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,8,8,8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9,9,9,10,10,10,10,10,10,10,10,10,10],[2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10],[1,1,1,0,0,1,1,0,0,1,0,1,1,0,0,0,1,1,1,0,1,1,1,0,1,0,1,0,0,0,1,1,1,0,0,0,0,1,1,1,0,1,0,0,1,1,0,0,0,0,1,1,0,0,0,0,0,0,0,1,0,1,1,0,0,1,0,1,1,1,0,1,0,0,1,1,1,1,0,1,0,0,0,0,1,1,0,1,0,0,1,0,0,1,0,0,0,0,1,0],[1,1,1,0,1,1,1,1,0,0,0,0,1,0,0,0,0,0,0,1,0,0,1,0,0,1,1,1,1,1,1,0,1,0,0,0,1,0,1,1,1,0,1,1,0,0,1,1,1,0,0,1,1,0,0,1,1,0,0,1,1,0,1,0,1,1,0,0,0,0,1,0,1,0,0,0,1,1,1,0,1,0,1,0,0,0,1,1,0,0,0,1,0,1,0,0,1,1,1,0],[0,0,1,1,0,1,1,1,0,1,0,1,0,1,0,1,0,0,0,0,0,1,1,0,1,1,0,0,0,1,1,1,0,1,0,1,0,0,1,1,0,0,0,0,1,1,1,0,1,1,1,0,0,1,1,1,1,0,1,0,0,0,0,0,0,0,1,0,1,0,0,1,1,1,0,0,0,0,0,0,1,1,0,1,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0],[2,1,3,2,2,2,2,3,10,4,2,2,2,2,8,2,2,1,2,2,1,2,1,3,3,1,1,2,1,6,2,1,1,2,2,2,2,1,1,3,2,2,2,2,3,2,3,3,2,2,1,2,2,2,4,1,8,6,2,2,1,4,3,10,3,2,1,2,2,1,2,2,3,2,2,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,1,5,10,3,1,2,8,2,4,3],[false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,true,false,true,false,false,false,true,false,false,false,false,true,true,false,false,false,false,true,true,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>student_id<\/th>\n      <th>assignment_id<\/th>\n      <th>question_number<\/th>\n      <th>correct<\/th>\n      <th>viewed_hint<\/th>\n      <th>requested_solution<\/th>\n      <th>attempts<\/th>\n      <th>cfa<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3,4,5,6]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="ensym" class="section level2">
+<h2>ensym and !!: summarize_student_performance</h2>
+<p>The next-easiest thing I want to do with this data is to summarize how the students performed. The variables I include in the summary are going to be the same each time, but I want to be able to easily change what I group by: <code>student_id</code>, <code>assignment_id</code>, or <code>question_number</code>. Let’s take a look at the <code>dplyr</code> code to do what I want, then see what it will take to turn it into a function.</p>
+<pre class="r"><code>student_assignment_data %&gt;% 
+  add_cfa_col() %&gt;% 
+  # question_number will be passed via a parameter in the function.
+  dplyr::group_by(question_number) %&gt;% 
+  dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )</code></pre>
+<div id="htmlwidget-4" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-4">{"x":{"filter":"none","data":[[1,2,3,4,5,6,7,8,9,10],[0.5,0.8,0.5,0.1,0.4,0.5,0.4,0.5,0.4,0.5],[0.6,0.3,0.9,0.2,0.2,0.4,0.8,0.6,0.5,0.4],[0.4,0.6,0.4,0.7,0.4,0.7,0.5,0.2,0.5,0.4]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>question_number<\/th>\n      <th>mean_correct<\/th>\n      <th>mean_viewed_hint<\/th>\n      <th>mean_requested_solution<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"paging":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<p>In my function, I want to pass in a parameter telling the function how to group the data. I’ll call this parameter <code>group_col</code>. The problem is, <code>group_by</code> already expects a “bare” symbol naming that column; if I tell it to <code>group_by(group_col)</code>, it will look for a column named “group_col” in the data, fail to find that column, and throw an error. I need to tell it to <em>translate the parameter I send in to the name of a column.</em> To do this, we need two functions from <code>rlang</code>: <code>ensym</code> and <code>!!</code> (pronounced “bang-bang”). First we tell our function “think of this parameter as a symbol” using the <code>ensym</code> function, <code>rlang::ensym(group_col)</code>. Then we’ll tell group_by to process the code we gave it rather than looking for a column named “rlang::ensym(group_col)” with <code>!!</code>, <code>!!rlang::ensym(group_col)</code>. I think of <code>!!</code> as telling group_by “It’s not <code>group_col</code>, but it’s also not <em>not</em> <code>group_col</code>.”</p>
+<p>With those two functions in place, we get this:</p>
+<pre class="r"><code>summarize_student_performance &lt;- function(.data, group_col) {
+  .data %&gt;% 
+    dplyr::group_by(!!rlang::ensym(group_col)) %&gt;% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %&gt;% 
+  add_cfa_col() %&gt;% 
+  summarize_student_performance(question_number)</code></pre>
+<div id="htmlwidget-5" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-5">{"x":{"filter":"none","data":[[1,2,3,4,5,6,7,8,9,10],[0.5,0.8,0.5,0.1,0.4,0.5,0.4,0.5,0.4,0.5],[0.6,0.3,0.9,0.2,0.2,0.4,0.8,0.6,0.5,0.4],[0.4,0.6,0.4,0.7,0.4,0.7,0.5,0.2,0.5,0.4]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>question_number<\/th>\n      <th>mean_correct<\/th>\n      <th>mean_viewed_hint<\/th>\n      <th>mean_requested_solution<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"paging":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="ensyms" class="section level2">
+<h2>ensyms and !!!: summarize_student_performance with multiple grouping parameters</h2>
+<p>Looking at that data, what I’d really like to do is group by both <code>question_number</code> and <code>assignment_id</code>, so I can see how students performed question-by-question on each assignment. Let’s update <code>summarize_student_performance</code> to accept any number of grouping columns. Instead of accepting .data and a single parameter, our function will accept .data and <code>...</code>, which is used in R functions to indicate a list of parameters. Since we might have more than one parameter to look at, we use the <code>rlang</code> function <code>ensyms</code> rather than <code>ensym</code>, and !!! (pronounced “bang-bang-bang” with formal meaning “ungroup and splice,” but just remember that <code>!!!</code> is connected to <code>...</code>). Let’s see how that looks:</p>
+<pre class="r"><code>summarize_student_performance &lt;- function(.data, ...) {
+  .data %&gt;% 
+    dplyr::group_by(!!!rlang::ensyms(...)) %&gt;% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %&gt;% 
+  add_cfa_col() %&gt;% 
+  summarize_student_performance(assignment_id, question_number)</code></pre>
+<div id="htmlwidget-6" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-6">{"x":{"filter":"none","data":[[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4],[1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10],[1,1,0,0,0,0,0,0,0,1,1,0.666666666666667,0.666666666666667,0.333333333333333,0.333333333333333,0.333333333333333,0.666666666666667,0,0.333333333333333,0.333333333333333,0,0.5,0.5,0,0.5,1,0,1,0.5,0.5,0.25,1,0.5,0,0.5,0.5,0.5,0.75,0.5,0.5],[0,1,1,0,0,1,1,0,0,1,0.333333333333333,0.666666666666667,0.666666666666667,0.333333333333333,0.333333333333333,0.666666666666667,1,1,0.666666666666667,0.333333333333333,1,0,1,0,0.5,0.5,0.5,0.5,0,0,0.75,0,1,0.25,0,0,0.75,0.5,0.75,0.5],[1,0,0,1,1,1,1,0,1,0,0.333333333333333,0.666666666666667,1,0.666666666666667,0.666666666666667,1,0.666666666666667,0.666666666666667,0.333333333333333,0.666666666666667,0.5,0.5,0,0.5,0,0,0.5,0,0.5,0,0.25,0.75,0.25,0.75,0.25,0.75,0.25,0,0.5,0.5]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>assignment_id<\/th>\n      <th>question_number<\/th>\n      <th>mean_correct<\/th>\n      <th>mean_viewed_hint<\/th>\n      <th>mean_requested_solution<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3,4]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="enquo" class="section level2">
+<h2>enquo(s): summarize_student_performance grouped by functions of parameters</h2>
+<p>What if I want to divide my students into two groups, one if their student_id is even, another if their student_id is odd? <code>group_by</code> allows me to pass in a function of column names, from which it will derive a grouping. For example, <code>dplyr::group_by(student_id %% 2)</code> will create two groups with values <code>0</code> and <code>1</code>. I can also name that group with <code>dplyr::group_by(student_group = student_id %% 2)</code>, to make my output make more sense. Let’s adapt our function to take advantage of these options.</p>
+<p>At this point, we’re no longer safe to assume that the parameters are meant to be treated as symbols. Moreover, it’s possible the user of our function will redefine the function they’re using in the <code>group_by</code>, so we need to make sure we evaluate their expression in <em>their</em> environment, rather than our <em>function’s</em> environment. To send in an expression and bring the user’s environment along for the ride, we use <code>rlang::enquo</code> (or <code>rlang::enquos</code> for <code>...</code> or a list of parameters). Let’s see how that works.</p>
+<pre class="r"><code>summarize_student_performance &lt;- function(.data, ...) {
+  .data %&gt;% 
+    dplyr::group_by(!!!rlang::enquos(...)) %&gt;% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %&gt;% 
+  add_cfa_col() %&gt;% 
+  summarize_student_performance(student_group = student_id %% 2)</code></pre>
+<div id="htmlwidget-7" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-7">{"x":{"filter":"none","data":[[0,1],[0.46,0.46],[0.44,0.54],[0.54,0.42]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>student_group<\/th>\n      <th>mean_correct<\/th>\n      <th>mean_viewed_hint<\/th>\n      <th>mean_requested_solution<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="quo_name" class="section level2">
+<h2>quo_name: summarize_mean</h2>
+<p>Oops! I meant to include mean_cfa in these tables, but I missed it! I already have three copies of that same code, so it’s time to consider <a href="http://r4ds.had.co.nz/functions.html#when-should-you-write-a-function">turning it into a function</a>. Let’s add a helper function for our function, building the <code>summarize</code> call by passing in a list of variables for which we want to find the mean.</p>
+<p>I want to add “mean_” to the front of each variable I pass into that function, so I’ll need to both treat the parameter as a <code>symbol</code> (the column for which I’ll find the mean) and a <code>character string</code> (the thing which will be appended to “mean_”). I can get a string representing the name of the parameter using <code>rlang::quo_name</code>. This would have probably been easier to demonstrate if I were trying to do something simpler, but I couldn’t think of a good, easy example, so I’ll try to walk through this code slowly.</p>
+<pre class="r"><code>summarize_mean &lt;- function(.data, ...) {
+  # Capture the dots into quos.
+  summarize_vars &lt;- enquos(...)
+  
+  # Capture the names of the dots by applying rlang::quo_name 
+  # to each member of summarize_vars.
+  names_of_vars &lt;- purrr::map(summarize_vars, rlang::quo_name)
+  
+  # Name the list of quosures generated above.
+  names(summarize_vars) &lt;- paste0(&quot;mean_&quot;, names_of_vars)
+  
+  # Use dplyr::summarize_at to summarize those columns using mean.
+  dplyr::summarize_at(.data, dplyr::vars(!!! summarize_vars), mean)
+}
+
+# Now call that function in the summarize_student_performance function.
+summarize_student_performance &lt;- function(.data, ...) {
+  .data %&gt;% 
+    dplyr::group_by(!!!rlang::enquos(...)) %&gt;% 
+    summarize_mean(correct, viewed_hint, requested_solution, cfa)
+}
+
+student_assignment_data %&gt;% 
+  add_cfa_col() %&gt;% 
+  summarize_student_performance(student_group = student_id %% 2)</code></pre>
+<div id="htmlwidget-8" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-8">{"x":{"filter":"none","data":[[0,1],[0.46,0.46],[0.44,0.54],[0.54,0.42],[0.14,0.1]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>student_group<\/th>\n      <th>mean_correct<\/th>\n      <th>mean_viewed_hint<\/th>\n      <th>mean_requested_solution<\/th>\n      <th>mean_cfa<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,3,4]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="digest_assign" class="section level2">
+<h2>:=, a new assignment operator: mutate_logical</h2>
+<p>I mentioned above that there was something I’d like to do at the very beginning, but it was a bit complicated to explain. We’re ready to tackle that now. I’d like to convert the integer columns <code>correct</code>, <code>viewed_hint</code>, and <code>requested_solution</code> to logical (<code>TRUE</code>/<code>FALSE</code>) values. I can do this with three mutates:</p>
+<pre class="r"><code>student_assignment_data %&gt;% 
+  dplyr::mutate(
+    correct = as.logical(correct), 
+    viewed_hint = as.logical(viewed_hint), 
+    requested_solution = as.logical(requested_solution)
+  )</code></pre>
+<div id="htmlwidget-9" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-9">{"x":{"filter":"none","data":[[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,8,8,8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9,9,9,10,10,10,10,10,10,10,10,10,10],[2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10],[true,true,true,false,false,true,true,false,false,true,false,true,true,false,false,false,true,true,true,false,true,true,true,false,true,false,true,false,false,false,true,true,true,false,false,false,false,true,true,true,false,true,false,false,true,true,false,false,false,false,true,true,false,false,false,false,false,false,false,true,false,true,true,false,false,true,false,true,true,true,false,true,false,false,true,true,true,true,false,true,false,false,false,false,true,true,false,true,false,false,true,false,false,true,false,false,false,false,true,false],[true,true,true,false,true,true,true,true,false,false,false,false,true,false,false,false,false,false,false,true,false,false,true,false,false,true,true,true,true,true,true,false,true,false,false,false,true,false,true,true,true,false,true,true,false,false,true,true,true,false,false,true,true,false,false,true,true,false,false,true,true,false,true,false,true,true,false,false,false,false,true,false,true,false,false,false,true,true,true,false,true,false,true,false,false,false,true,true,false,false,false,true,false,true,false,false,true,true,true,false],[false,false,true,true,false,true,true,true,false,true,false,true,false,true,false,true,false,false,false,false,false,true,true,false,true,true,false,false,false,true,true,true,false,true,false,true,false,false,true,true,false,false,false,false,true,true,true,false,true,true,true,false,false,true,true,true,true,false,true,false,false,false,false,false,false,false,true,false,true,false,false,true,true,true,false,false,false,false,false,false,true,true,false,true,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,false],[2,1,3,2,2,2,2,3,10,4,2,2,2,2,8,2,2,1,2,2,1,2,1,3,3,1,1,2,1,6,2,1,1,2,2,2,2,1,1,3,2,2,2,2,3,2,3,3,2,2,1,2,2,2,4,1,8,6,2,2,1,4,3,10,3,2,1,2,2,1,2,2,3,2,2,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,1,5,10,3,1,2,8,2,4,3]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>student_id<\/th>\n      <th>assignment_id<\/th>\n      <th>question_number<\/th>\n      <th>correct<\/th>\n      <th>viewed_hint<\/th>\n      <th>requested_solution<\/th>\n      <th>attempts<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,6]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+<p>I could make that somewhat simpler using dplyr::mutate_at, but then it turns into almost exactly the same problem as above, and we don’t learn anything new. Instead we’ll make a function that takes <code>.data</code> and a single input column, and converts that column to logical. To do this, we’re going to need to use a new assignment operator, <code>:=</code> (“colon-equals”, but I think of it as “digest then assign”). The normal argument assignment operator, <code>=</code>, only parses stuff on the right-hand-side. It assumes anything to the left of it is fine as-is. However, when we’re coding with tidy evaluation, that isn’t always the case. <code>:=</code> is otherwise exactly the same as <code>=</code>, though, so its use is pretty straightforward. I’m also going to redefine (and simplify) my <code>add_cfa_col</code> function, since now the <code>correct</code> column will be logical. We’ll leave the summarize off this time, so we can make sure our new function works. Note: This doesn’t actually <em>do anything useful</em> in this case, but I like to make sure that my column types mean what I want them to mean.</p>
+<pre class="r"><code>mutate_logical &lt;- function(.data, logical_col) {
+  logical_col &lt;- rlang::ensym(logical_col)
+  dplyr::mutate(.data, !!logical_col := as.logical(!!logical_col))
+}
+
+# correct will now be TRUE/FALSE, so we don&#39;t have to test 
+# that it&#39;s equal to 1L.
+add_cfa_col &lt;- function(.data) {
+  dplyr::mutate(.data, cfa = correct &amp; attempts == 1L)
+}
+
+student_assignment_data %&gt;% 
+  mutate_logical(correct) %&gt;% 
+  mutate_logical(viewed_hint) %&gt;% 
+  mutate_logical(requested_solution) %&gt;% 
+  add_cfa_col()</code></pre>
+<div id="htmlwidget-10" style="width:100%;height:auto;" class="datatables html-widget"></div>
+<script type="application/json" data-for="htmlwidget-10">{"x":{"filter":"none","data":[[1,1,1,1,1,1,1,1,1,1,2,2,2,2,2,2,2,2,2,2,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,5,5,5,5,5,5,5,5,5,5,6,6,6,6,6,6,6,6,6,6,7,7,7,7,7,7,7,7,7,7,8,8,8,8,8,8,8,8,8,8,9,9,9,9,9,9,9,9,9,9,10,10,10,10,10,10,10,10,10,10],[2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,2,2,2,2,2,2,2,2,2,2,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,1,1,1,1,1,1,1,1,1,1,3,3,3,3,3,3,3,3,3,3,4,4,4,4,4,4,4,4,4,4,3,3,3,3,3,3,3,3,3,3,2,2,2,2,2,2,2,2,2,2],[1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10,1,2,3,4,5,6,7,8,9,10],[true,true,true,false,false,true,true,false,false,true,false,true,true,false,false,false,true,true,true,false,true,true,true,false,true,false,true,false,false,false,true,true,true,false,false,false,false,true,true,true,false,true,false,false,true,true,false,false,false,false,true,true,false,false,false,false,false,false,false,true,false,true,true,false,false,true,false,true,true,true,false,true,false,false,true,true,true,true,false,true,false,false,false,false,true,true,false,true,false,false,true,false,false,true,false,false,false,false,true,false],[true,true,true,false,true,true,true,true,false,false,false,false,true,false,false,false,false,false,false,true,false,false,true,false,false,true,true,true,true,true,true,false,true,false,false,false,true,false,true,true,true,false,true,true,false,false,true,true,true,false,false,true,true,false,false,true,true,false,false,true,true,false,true,false,true,true,false,false,false,false,true,false,true,false,false,false,true,true,true,false,true,false,true,false,false,false,true,true,false,false,false,true,false,true,false,false,true,true,true,false],[false,false,true,true,false,true,true,true,false,true,false,true,false,true,false,true,false,false,false,false,false,true,true,false,true,true,false,false,false,true,true,true,false,true,false,true,false,false,true,true,false,false,false,false,true,true,true,false,true,true,true,false,false,true,true,true,true,false,true,false,false,false,false,false,false,false,true,false,true,false,false,true,true,true,false,false,false,false,false,false,true,true,false,true,false,false,false,false,false,false,true,true,true,true,true,true,true,true,true,false],[2,1,3,2,2,2,2,3,10,4,2,2,2,2,8,2,2,1,2,2,1,2,1,3,3,1,1,2,1,6,2,1,1,2,2,2,2,1,1,3,2,2,2,2,3,2,3,3,2,2,1,2,2,2,4,1,8,6,2,2,1,4,3,10,3,2,1,2,2,1,2,2,3,2,2,2,2,2,2,2,2,2,3,2,2,2,2,2,2,2,1,5,10,3,1,2,8,2,4,3],[false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,true,false,true,false,false,false,true,false,false,false,false,true,true,false,false,false,false,true,true,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,false,true,false,false,false,false,false,false,false,false,false]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>student_id<\/th>\n      <th>assignment_id<\/th>\n      <th>question_number<\/th>\n      <th>correct<\/th>\n      <th>viewed_hint<\/th>\n      <th>requested_solution<\/th>\n      <th>attempts<\/th>\n      <th>cfa<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"scrollX":true,"lengthChange":false,"pageLength":6,"searching":false,"columnDefs":[{"className":"dt-right","targets":[0,1,2,6]}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+<div id="what-we-learned" class="section level2">
+<h2>What we learned</h2>
+<p>There’s (quite a bit) more available in <code>rlang</code>, but these functions should cover you for a large proportion of programming with the <code>tidyverse</code>:</p>
+<ul>
+<li><code>ensym</code> tells tidyverse functions to think of a parameter as a symbol (and errors if we pass in something other than a string or a bare symbol).</li>
+<li><code>!!</code> (“bang-bang”) tells tidyverse functions to process the thing we’re giving it to get down to the bare column names they expect.</li>
+<li><code>ensyms</code> is like <code>ensym</code>, but works for a list of parameters (including <code>...</code>).</li>
+<li><code>!!!</code> is like <code>!!</code>, but works for a list of parameters (<code>!!!</code> goes with <code>...</code>).</li>
+<li><code>enquo</code> and <code>enquos</code> bring the environment of the parameter along for the ride, to let us work with expressions.</li>
+<li><code>quo_name</code> gives us the (character) name of something we’ve enquo’ed.</li>
+<li><code>:=</code> (“colon-equals” or “digest then assign”) lets us pass something complex (such as <code>!!rlang:enquo(my_var)</code>) on the left-hand-side of an assignment.</li>
+</ul>
+<p>Did I make something over-complicated, or miss something important? Let me know in the comments!</p>
+</div>
+<div id="generating" class="section level2">
+<h2>Generating the data</h2>
+<p>This code will generate the data I used in this post.</p>
+<pre class="r"><code>set.seed(123)
+student_assignment_data &lt;- tibble(
+  student_id = rep(1L:10L, 10), 
+  assignment_id = rep(sample(1L:4L, 10, replace = TRUE), 10), 
+  question_number = rep(1L:10L, each = 10), 
+  correct = sample(0L:1L, 100, replace = TRUE), 
+  viewed_hint = sample(0L:1L, 100, replace = TRUE),
+  requested_solution = sample(0L:1L, 100, replace = TRUE),
+  attempts = sample(1L:10L, 100, replace = TRUE, prob = c(0.2, 0.5, 0.2, rep(0.1/7, 7)))
+)</code></pre>
+</div>

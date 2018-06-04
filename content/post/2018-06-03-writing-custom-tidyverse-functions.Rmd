@@ -1,0 +1,384 @@
+---
+title: Writing Custom Tidyverse Functions
+author: Jon Harmon
+date: '2018-06-04'
+slug: writing-custom-tidyverse-functions
+categories: []
+tags:
+  - R
+  - tutorial
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(DT.options = list(scrollX = TRUE, lengthChange = FALSE, pageLength = 6, searching = FALSE))
+
+my_dt <- function(.data, ...) {
+  DT::datatable(.data, rownames = FALSE, ...)
+}
+```
+
+`dplyr` and the other members of the `tidyverse` are fantastic for making exploratory data analysis quick and easy. However, that ease-of-use comes with a price: programming with the `tidyverse` has a steep learning curve. Let's see if we can climb that hill together.
+
+## Packages used
+
+We'll need three packages for this tutorial: `dplyr`, `rlang`, and `purrr`. We'll be making custom versions of a couple functions in `dplyr`, and we'll use `rlang` (the package behind "tidy evaluation," the way the `tidyverse` "thinks") to make those changes. We'll also use `purrr::map` toward the end. I'll explicitly call out most function calls with `dplyr::` or `rlang::` to make it clear where each function comes from. There are four notable exceptions. The first is the pipe, `%>%`, which I assume you've seen before if you're reading this post (if not, check out the vignette in the `magrittr` package). I'll explain the other three when I get to them. 
+
+```{r packages, echo = TRUE, message = FALSE, warning = FALSE}
+library(dplyr) # v0.7.5
+library(rlang) # v0.2.1
+library(purrr) # v0.2.5
+```
+
+## Fake student data
+
+I'm going to work with some fake student data, logging how students interacted with 10 questions on one of four assignments, in which the students can keep making attempts on each question until they're scored as correct, request the solution, or move on to another question. In addition to a `student_id`, `assignment_id`, and `question_number`, each row specifies whether or not the student eventually reached the `correct` answer, whether they viewed a hint (`viewed_hint`), whether they gave up and requested the solution (`requested_solution`), and how many `attempts` they made on the question. If you'd like to generate the same data to play along, [see the code at the end of this post](#generating).
+
+```{r fake data, echo=FALSE}
+set.seed(123)
+student_assignment_data <- tibble(
+  student_id = rep(1L:10L, 10), 
+  assignment_id = rep(sample(1L:4L, 10, replace = TRUE), 10), 
+  question_number = rep(1L:10L, each = 10), 
+  correct = sample(0L:1L, 100, replace = TRUE), 
+  viewed_hint = sample(0L:1L, 100, replace = TRUE),
+  requested_solution = sample(0L:1L, 100, replace = TRUE),
+  attempts = sample(1L:10L, 100, replace = TRUE, prob = c(0.2, 0.5, 0.2, rep(0.1/7, 7)))
+) %>% 
+  arrange(student_id, question_number)
+my_dt(student_assignment_data)
+```
+
+## What we'll do
+
+* We'll start off with a [simple function](#not_fancy) that doesn't require any tidy evaluation, to make it clear that you don't *always* need to know anything special to program with tidyverse functions.
+* We'll then learn how we can pass a "bare" column name into a function and get dplyr's verbs to [use it how we expect it to be used](#ensym).
+* We'll extend that to send in [*multiple* column names](#ensyms).
+* We'll see how we can pass around [*functions* of column names](#enquo).
+* We'll see how we can get dplyr to [treat column names as strings](#quo_name) when we want them.
+* We'll learn about the [new assignment operator](#digest_assign) `:=`, and when we need it.
+
+## Nothing fancy: add_cfa_col {#not_fancy}
+
+The simplest thing I want to do is to add a column indicating whether the student got the correct answer on their first attempt ("cfa"). Note: This isn't the *first* thing I'd normally do, but it's by far the simplest, so we'll get it out of the way. I use this value a lot in my investigations, so it'll be nice to be able to add that column quickly and easily. This isn't *that* hard to do with a simple dplyr::mutate:
+
+```{r cfa via mutate, eval = FALSE}
+student_assignment_data %>% 
+  dplyr::mutate(cfa = correct == 1L & attempts == 1L)
+```
+```{r cfa via mutate display, echo = FALSE}
+student_assignment_data %>% 
+  dplyr::mutate(cfa = correct == 1L & attempts == 1L) %>% 
+  my_dt()
+```
+
+However, I do this *all the time.* I'd like to be able to add it by calling a custom function. Let's call that function `add_cfa_col`. If we assume my column names are always the same (or I can get them there before calling the function), this can be a simple function that doesn't rely on any tidy evaluation magic from `rlang`. I wanted to include this example to show you that it isn't *always* hard to program with the `tidyverse`.
+
+```{r cfa via function, eval = FALSE}
+add_cfa_col <- function(.data) {
+  dplyr::mutate(.data, cfa = correct == 1L & attempts == 1L)
+}
+
+student_assignment_data %>% 
+  add_cfa_col()
+```
+```{r cfa via function display, echo = FALSE}
+add_cfa_col <- function(.data) {
+  dplyr::mutate(.data, cfa = correct == 1L & attempts == 1L)
+}
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  my_dt()
+```
+
+## ensym and !!: summarize_student_performance {#ensym}
+
+The next-easiest thing I want to do with this data is to summarize how the students performed. The variables I include in the summary are going to be the same each time, but I want to be able to easily change what I group by: `student_id`, `assignment_id`, or `question_number`. Let's take a look at the `dplyr` code to do what I want, then see what it will take to turn it into a function.
+
+```{r summarize without function, eval = FALSE}
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  # question_number will be passed via a parameter in the function.
+  dplyr::group_by(question_number) %>% 
+  dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+```
+```{r summarize without function display, echo = FALSE}
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  dplyr::group_by(question_number) %>%
+  dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  ) %>% 
+  my_dt(options = list(paging = FALSE))
+```
+
+In my function, I want to pass in a parameter telling the function how to group the data. I'll call this parameter `group_col`. The problem is, `group_by` already expects a "bare" symbol naming that column; if I tell it to `group_by(group_col)`, it will look for a column named "group_col" in the data, fail to find that column, and throw an error. I need to tell it to *translate the parameter I send in to the name of a column.* To do this, we need two functions from `rlang`: `ensym` and `!!` (pronounced "bang-bang"). First we tell our function "think of this parameter as a symbol" using the `ensym` function, `rlang::ensym(group_col)`. Then we'll tell group_by to process the code we gave it rather than looking for a column named "rlang::ensym(group_col)" with `!!`, `!!rlang::ensym(group_col)`. I think of `!!` as telling group_by "It's not `group_col`, but it's also not *not* `group_col`."
+
+With those two functions in place, we get this:
+
+```{r summarize with function, eval = FALSE}
+summarize_student_performance <- function(.data, group_col) {
+  .data %>% 
+    dplyr::group_by(!!rlang::ensym(group_col)) %>% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(question_number)
+```
+```{r summarize with function display, echo = FALSE}
+summarize_student_performance <- function(.data, group_col) {
+  .data %>% 
+    dplyr::group_by(!! rlang::ensym(group_col)) %>% 
+    dplyr::summarize(
+      mean_correct = mean(correct), 
+      mean_viewed_hint = mean(viewed_hint), 
+      mean_requested_solution = mean(requested_solution)
+    )
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(question_number) %>% 
+  my_dt(options = list(paging = FALSE))
+```
+
+## ensyms and !!!: summarize_student_performance with multiple grouping parameters  {#ensyms}
+
+Looking at that data, what I'd really like to do is group by both `question_number` and `assignment_id`, so I can see how students performed question-by-question on each assignment. Let's update `summarize_student_performance` to accept any number of grouping columns. Instead of accepting .data and a single parameter, our function will accept .data and `...`, which is used in R functions to indicate a list of parameters. Since we might have more than one parameter to look at, we use the `rlang` function `ensyms` rather than `ensym`, and !!! (pronounced "bang-bang-bang" with formal meaning "ungroup and splice," but just remember that `!!!` is connected to `...`). Let's see how that looks:
+
+```{r summarize by multiple, eval = FALSE}
+summarize_student_performance <- function(.data, ...) {
+  .data %>% 
+    dplyr::group_by(!!!rlang::ensyms(...)) %>% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(assignment_id, question_number)
+```
+```{r summarize by multiple display, echo = FALSE}
+summarize_student_performance <- function(.data, ...) {
+  .data %>% 
+    dplyr::group_by(!!!rlang::ensyms(...)) %>% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(assignment_id, question_number) %>% 
+  my_dt()
+```
+
+## enquo(s): summarize_student_performance grouped by functions of parameters {#enquo}
+
+What if I want to divide my students into two groups, one if their student_id is even, another if their student_id is odd? `group_by` allows me to pass in a function of column names, from which it will derive a grouping. For example, `dplyr::group_by(student_id %% 2)` will create two groups with values `0` and `1`. I can also name that group with `dplyr::group_by(student_group = student_id %% 2)`, to make my output make more sense. Let's adapt our function to take advantage of these options.
+
+At this point, we're no longer safe to assume that the parameters are meant to be treated as symbols. Moreover, it's possible the user of our function will redefine the function they're using in the `group_by`, so we need to make sure we evaluate their expression in *their* environment, rather than our *function's* environment. To send in an expression and bring the user's environment along for the ride, we use `rlang::enquo` (or `rlang::enquos` for `...` or a list of parameters). Let's see how that works.
+
+```{r summarize with enquos, eval = FALSE}
+summarize_student_performance <- function(.data, ...) {
+  .data %>% 
+    dplyr::group_by(!!!rlang::enquos(...)) %>% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(student_group = student_id %% 2)
+```
+```{r summarize with enquos display, echo = FALSE}
+summarize_student_performance <- function(.data, ...) {
+  .data %>% 
+    dplyr::group_by(!!!rlang::enquos(...)) %>% 
+    dplyr::summarize(
+    mean_correct = mean(correct), 
+    mean_viewed_hint = mean(viewed_hint), 
+    mean_requested_solution = mean(requested_solution)
+  )
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(student_group = student_id %% 2) %>% 
+  my_dt()
+```
+
+## quo_name: summarize_mean {#quo_name}
+
+Oops! I meant to include mean_cfa in these tables, but I missed it! I already have three copies of that same code, so it's time to consider [turning it into a function](http://r4ds.had.co.nz/functions.html#when-should-you-write-a-function). Let's add a helper function for our function, building the `summarize` call by passing in a list of variables for which we want to find the mean.
+
+I want to add "mean_" to the front of each variable I pass into that function, so I'll need to both treat the parameter as a `symbol` (the column for which I'll find the mean) and a `character string` (the thing which will be appended to "mean_"). I can get a string representing the name of the parameter using `rlang::quo_name`. This would have probably been easier to demonstrate if I were trying to do something simpler, but I couldn't think of a good, easy example, so I'll try to walk through this code slowly.
+
+```{r quo_name, eval = FALSE}
+summarize_mean <- function(.data, ...) {
+  # Capture the dots into quos.
+  summarize_vars <- enquos(...)
+  
+  # Capture the names of the dots by applying rlang::quo_name 
+  # to each member of summarize_vars.
+  names_of_vars <- purrr::map(summarize_vars, rlang::quo_name)
+  
+  # Name the list of quosures generated above.
+  names(summarize_vars) <- paste0("mean_", names_of_vars)
+  
+  # Use dplyr::summarize_at to summarize those columns using mean.
+  dplyr::summarize_at(.data, dplyr::vars(!!! summarize_vars), mean)
+}
+
+# Now call that function in the summarize_student_performance function.
+summarize_student_performance <- function(.data, ...) {
+  .data %>% 
+    dplyr::group_by(!!!rlang::enquos(...)) %>% 
+    summarize_mean(correct, viewed_hint, requested_solution, cfa)
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(student_group = student_id %% 2)
+```
+```{r quo_name display, echo = FALSE}
+summarize_mean <- function(.data, ...) {
+  # Capture the dots into quos.
+  summarize_vars <- enquos(...)
+  
+  # Capture the names of the dots by applying rlang::quo_name 
+  # to each member of summarize_vars.
+  names_of_vars <- purrr::map(summarize_vars, rlang::quo_name)
+  
+  # Name the list of quosures generated above.
+  names(summarize_vars) <- paste0("mean_", names_of_vars)
+  
+  # Use dplyr::summarize_at to summarize those columns using mean.
+  dplyr::summarize_at(.data, dplyr::vars(!!! summarize_vars), mean)
+}
+
+# Now call that function in the summarize_student_performance function.
+summarize_student_performance <- function(.data, ...) {
+  .data %>% 
+    dplyr::group_by(!!!rlang::enquos(...)) %>% 
+    summarize_mean(correct, viewed_hint, requested_solution, cfa)
+}
+
+student_assignment_data %>% 
+  add_cfa_col() %>% 
+  summarize_student_performance(student_group = student_id %% 2) %>% 
+  my_dt()
+```
+
+## :=, a new assignment operator: mutate_logical {#digest_assign}
+
+I mentioned above that there was something I'd like to do at the very beginning, but it was a bit complicated to explain. We're ready to tackle that now. I'd like to convert the integer columns `correct`, `viewed_hint`, and `requested_solution` to logical (`TRUE`/`FALSE`) values. I can do this with three mutates:
+
+```{r logical via mutate, echo=TRUE, eval=FALSE}
+student_assignment_data %>% 
+  dplyr::mutate(
+    correct = as.logical(correct), 
+    viewed_hint = as.logical(viewed_hint), 
+    requested_solution = as.logical(requested_solution)
+  )
+```
+```{r logical via mutate display, echo=FALSE}
+student_assignment_data %>% 
+  dplyr::mutate(
+    correct = as.logical(correct), 
+    viewed_hint = as.logical(viewed_hint), 
+    requested_solution = as.logical(requested_solution)
+  ) %>% 
+  my_dt()
+```
+
+I could make that somewhat simpler using dplyr::mutate_at, but then it turns into almost exactly the same problem as above, and we don't learn anything new. Instead we'll make a function that takes `.data` and a single input column, and converts that column to logical. To do this, we're going to need to use a new assignment operator, `:=` ("colon-equals", but I think of it as "digest then assign"). The normal argument assignment operator, `=`, only parses stuff on the right-hand-side. It assumes anything to the left of it is fine as-is. However, when we're coding with tidy evaluation, that isn't always the case. `:=` is otherwise exactly the same as `=`, though, so its use is pretty straightforward. I'm also going to redefine (and simplify) my `add_cfa_col` function, since now the `correct` column will be logical. We'll leave the summarize off this time, so we can make sure our new function works. Note: This doesn't actually *do anything useful* in this case, but I like to make sure that my column types mean what I want them to mean.
+
+```{r digest assign, eval = FALSE}
+mutate_logical <- function(.data, logical_col) {
+  logical_col <- rlang::ensym(logical_col)
+  dplyr::mutate(.data, !!logical_col := as.logical(!!logical_col))
+}
+
+# correct will now be TRUE/FALSE, so we don't have to test 
+# that it's equal to 1L.
+add_cfa_col <- function(.data) {
+  dplyr::mutate(.data, cfa = correct & attempts == 1L)
+}
+
+student_assignment_data %>% 
+  mutate_logical(correct) %>% 
+  mutate_logical(viewed_hint) %>% 
+  mutate_logical(requested_solution) %>% 
+  add_cfa_col()
+```
+```{r digest assign display, echo = FALSE}
+mutate_logical <- function(.data, logical_col) {
+  logical_col <- rlang::ensym(logical_col)
+  dplyr::mutate(.data, !!logical_col := as.logical(!!logical_col))
+}
+
+# correct will now be TRUE/FALSE, so we don't have to test 
+# that it's equal to 1L.
+add_cfa_col <- function(.data) {
+  dplyr::mutate(.data, cfa = correct & attempts == 1L)
+}
+
+student_assignment_data %>% 
+  mutate_logical(correct) %>% 
+  mutate_logical(viewed_hint) %>% 
+  mutate_logical(requested_solution) %>% 
+  add_cfa_col() %>% 
+  my_dt()
+```
+
+## What we learned
+
+There's (quite a bit) more available in `rlang`, but these functions should cover you for a large proportion of programming with the `tidyverse`:
+
+* `ensym` tells tidyverse functions to think of a parameter as a symbol (and errors if we pass in something other than a string or a bare symbol).
+* `!!` ("bang-bang") tells tidyverse functions to process the thing we're giving it to get down to the bare column names they expect.
+* `ensyms` is like `ensym`, but works for a list of parameters (including `...`).
+* `!!!` is like `!!`, but works for a list of parameters (`!!!` goes with `...`).
+* `enquo` and `enquos` bring the environment of the parameter along for the ride, to let us work with expressions.
+* `quo_name` gives us the (character) name of something we've enquo'ed.
+* `:=` ("colon-equals" or "digest then assign") lets us pass something complex (such as `!!rlang:enquo(my_var)`) on the left-hand-side of an assignment.
+
+Did I make something over-complicated, or miss something important? Let me know in the comments!
+
+## Generating the data {#generating}
+
+This code will generate the data I used in this post.
+
+```{r generating the data, echo=TRUE, eval=FALSE}
+set.seed(123)
+student_assignment_data <- tibble(
+  student_id = rep(1L:10L, 10), 
+  assignment_id = rep(sample(1L:4L, 10, replace = TRUE), 10), 
+  question_number = rep(1L:10L, each = 10), 
+  correct = sample(0L:1L, 100, replace = TRUE), 
+  viewed_hint = sample(0L:1L, 100, replace = TRUE),
+  requested_solution = sample(0L:1L, 100, replace = TRUE),
+  attempts = sample(1L:10L, 100, replace = TRUE, prob = c(0.2, 0.5, 0.2, rep(0.1/7, 7)))
+)
+```
