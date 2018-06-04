@@ -30,6 +30,8 @@ library(rlang) # v0.2.1
 library(purrr) # v0.2.5
 ```
 
+I'd also like to thank [Miles McBain](https://twitter.com/MilesMcBain) for his excellent [friendlyeval](https://github.com/MilesMcBain/friendlyeval) package, which helped me understand tidy evaluation faster and better.
+
 ## Fake student data
 
 I'm going to work with some fake student data, logging how students interacted with 10 questions on one of four assignments, in which the students can keep making attempts on each question until they're scored as correct, request the solution, or move on to another question. In addition to a `student_id`, `assignment_id`, and `question_number`, each row specifies whether or not the student eventually reached the `correct` answer, whether they viewed a hint (`viewed_hint`), whether they gave up and requested the solution (`requested_solution`), and how many `attempts` they made on the question. If you'd like to generate the same data to play along, [see the code at the end of this post](#generating).
