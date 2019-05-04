@@ -1,0 +1,22 @@
+---
+title: Learning R
+author: Jon Harmon
+date: '2019-04-12'
+slug: learning-r
+categories: []
+tags:
+  - R
+  - learning
+---
+
+Maybe say why, maybe not.
+
+Teach what variables are and how to assign. Let them know about alt-- in Rstudio, even.
+
+Mention indexing, mostly that you just leave a blank for 2d things.
+
+Also teach c() (and that it means combine!).
+
+Warn that errors can be hard to debug, 
+
+Send them here: https://app.dataquest.io/m/336/working-with-data-frames
