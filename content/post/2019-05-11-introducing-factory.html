@@ -1,0 +1,117 @@
+---
+title: 'Introducing {factory}: Automate Your Automation'
+author: Jon Harmon
+date: '2019-05-11'
+slug: introducing-factory
+categories: []
+tags:
+  - packages
+  - R
+---
+
+
+
+<p><img src="/post/2019-05-11-introducing-factory_files/factory.png" style="float:right;padding:10px;" /> Function factories are, in my opinion, one of the cooler concepts in programming. A function factory is a function that produces a function. A straightforward example function factory (from <a href="https://adv-r.hadley.nz/function-factories.html"><em>Advanced R</em> (second edition) by Hadley Wickham</a>) is a power function factory, which can be used to produce functions that raise their input to a specific power. You’d probably never actually use this exact factory, but it gets the general idea across:</p>
+<pre class="r"><code>power1 &lt;- function(exp) {
+  function(x) {
+    x ^ exp
+  }
+}
+
+square &lt;- power1(2)
+cube &lt;- power1(3)
+
+square(3)</code></pre>
+<pre><code>## [1] 9</code></pre>
+<pre class="r"><code>cube(3)</code></pre>
+<pre><code>## [1] 27</code></pre>
+<p>However, there’s a reason that particular factory is named <code>power1</code> in <em>Advanced R</em>. That factory is fragile:</p>
+<pre class="r"><code>y &lt;- 2
+square &lt;- power1(y)
+y &lt;- 3
+square(2)</code></pre>
+<pre><code>## [1] 8</code></pre>
+<p>Since <code>y</code> changed before we called <code>square</code>, <code>square</code> didn’t work how we expected it to work. You can get around this by <code>force</code>ing the input to evaluate:</p>
+<pre class="r"><code>power2 &lt;- function(exp) {
+  force(exp)
+  function(x) {
+    x ^ exp
+  }
+}
+
+y &lt;- 2
+square &lt;- power2(y)
+y &lt;- 3
+square(2)</code></pre>
+<pre><code>## [1] 4</code></pre>
+<p>That requirement makes function factories a bit more complicated to code. For an extreme example, see <a href="https://github.com/r-lib/scales/pull/81">this pull request to the <code>scales</code> package</a>, which took almost two years to get everything nailed down.</p>
+<p>Even when you remember to force evaluation of variables inside the factory, the function produced by a factory isn’t quite what you might expect it to be:</p>
+<pre class="r"><code>square</code></pre>
+<pre><code>## function(x) {
+##     x ^ exp
+##   }
+## &lt;environment: 0x00000000161e58a0&gt;</code></pre>
+<p>Looking at that code, you can’t really tell what the function does. What is <code>exp</code>? How does the function know that it’s <code>2</code>? To figure that out, you need to dig into the environment that’s displayed when you print <code>square</code>. It would be nicer if the output of a factory was a <em>normal</em> function that users could then adapt and work with like any other function.</p>
+<p>The <code>{rlang}</code> package solves this problem by introducing the function <code>new_function</code> (as described in <a href="https://adv-r.hadley.nz/quasiquotation.html#new-function">Advanced R by Hadley Wickham (2nd Edition), 19.7.4: Creating functions</a>):</p>
+<pre class="r"><code>power3 &lt;- function(exp) {
+  rlang::new_function(
+    rlang::exprs(x = ), 
+    rlang::expr({
+      x ^ !!exp
+    }), 
+    rlang::caller_env()
+  )
+}
+
+y &lt;- 2
+square &lt;- power3(y)
+y &lt;- 3
+square(2)</code></pre>
+<pre><code>## [1] 4</code></pre>
+<pre class="r"><code>square</code></pre>
+<pre><code>## function (x) 
+## {
+##     x^2
+## }</code></pre>
+<p>Now the resulting function looks like any other function… but we’ve just moved the complexity from the factory user to the factory author.</p>
+<p>My goal with <a href="https://github.com/jonthegeek/factory"><code>{factory}</code></a> is to make factory creation easy for both the author and user.</p>
+<pre class="r"><code>library(factory)
+power4 &lt;- build_factory(
+  fun = function(x) {
+    x^exp
+  },
+  exp
+  # For the time being, you need to tell factory which arguments 
+  # belong to the factory.
+)
+
+x &lt;- 2
+square &lt;- power4(x)
+x &lt;- 3
+square(2)</code></pre>
+<pre><code>## [1] 4</code></pre>
+<pre class="r"><code>square</code></pre>
+<pre><code>## function (x) 
+## {
+##     x^2
+## }</code></pre>
+<p>The function is as easy to write as in <code>power1</code>, and the resulting function is a “normal” function as in <code>power3</code>.</p>
+<p>With help from <a href="https://twitter.com/_ColinFay">Colin Fay</a>, I’m currently working on adding an Rstudio addin to <code>{factory}</code>, to allow you to select some code (an instance of what you expect as output from a factory) and convert it into a factory. I also plan to add an addin to make it easy to use a factory while creating a package (a <a href="https://github.com/r-lib/gargle/pull/58">whole other can of worms</a>), but that will wait for a future blog post.</p>
+<p>Do you have any function factory use cases? Let me know here, or, more importantly, in a <a href="https://github.com/jonthegeek/factory/issues"><code>{factory}</code> issue</a>!</p>
+<pre class="r"><code>library(memer)
+meme_get(&quot;YoDawg&quot;) %&gt;% 
+  meme_text_top(
+    txt = toupper(&quot;Yo dawg I herd you like function factories&quot;), 
+    size = 24
+  ) %&gt;%  
+  meme_text_bottom(
+    txt = toupper(
+      paste(
+        &quot;so we put a function factory in a function factory&quot;,
+        &quot;so you can automate while you automate&quot;,
+        sep = &quot;\n&quot;
+      )
+    ), 
+    size = 22
+  )</code></pre>
+<p><img src="/post/2019-05-11-introducing-factory_files/figure-html/meme-1.png" /><!-- --></p>
