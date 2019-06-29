@@ -1,6 +1,8 @@
 ---
-title: "Contact"
-date: "2019-06-29T16:11:00-05:00"
+title: Contact
+author: Jon Harmon
+date: '2019-06-29'
 ---
 
-Contact info coming soon.
+* Work email: [jon.harmon@macmillan.com](mailto:jon.harmon@macmillan.com)
+* Personal email: [jonthegeek@gmail.com](mailto:jonthegeek@gmail.com)

@@ -3,7 +3,6 @@ languageCode = "en-us"
 title = "Jon Harmon's Blog"
 theme = "hugo-lithium-theme"
 googleAnalytics = ""
-disqusShortname = "jonthegeek"
 ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
 
 [permalinks]
