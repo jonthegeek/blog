@@ -3,7 +3,6 @@ languageCode = "en-us"
 title = "Jon Harmon's Blog"
 theme = "hugo-lithium-theme"
 googleAnalytics = ""
-disqusShortname = "jonthegeek"
 ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
 
 [permalinks]
@@ -12,6 +11,9 @@ ignoreFiles = ["\\.Rmd$", "\\.Rmarkdown$", "_files$", "_cache$"]
 [[menu.main]]
     name = "About"
     url = "/about/"
+[[menu.main]]
+    name = "Contact"
+    url = "/contact/"
 [[menu.main]]
     name = "Twitter"
     url = "https://twitter.com/jonthegeek"
